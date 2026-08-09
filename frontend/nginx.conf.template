@@ -1,0 +1,80 @@
+worker_processes auto;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+
+events { worker_connections 1024; }
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    access_log    /dev/stdout combined;
+
+    client_body_temp_path /tmp/nginx-body;
+    proxy_temp_path       /tmp/nginx-proxy;
+    fastcgi_temp_path     /tmp/nginx-fastcgi;
+    uwsgi_temp_path       /tmp/nginx-uwsgi;
+    scgi_temp_path        /tmp/nginx-scgi;
+
+    client_max_body_size 50m;
+    # SvelteKit's login page sets several cookies plus a long CSP header, which
+    # overflows nginx's stock 4k header buffer and 502s the page while the API
+    # proxies fine.
+    proxy_buffer_size   32k;
+    proxy_buffers       8 32k;
+    proxy_busy_buffers_size 64k;
+    proxy_read_timeout   300s;
+    proxy_send_timeout   300s;
+
+    # Railway's edge sets X-Forwarded-For to "<client>, <edge>" and the edge hop
+    # rotates between requests, so a limiter keyed on the whole header changes
+    # key every few requests and never fires. $remote_addr is always the edge.
+    # The first address of the header is the only usable per-client key here.
+    map $http_x_forwarded_for $ciso_client_ip {
+        default $remote_addr;
+        "~^([^,[:space:]]+)" $1;
+    }
+    limit_req_zone $ciso_client_ip zone=ciso_auth:10m rate=10r/m;
+    limit_req_status 429;
+
+    # Railway terminates TLS at the edge; the browser's scheme arrives in
+    # X-Forwarded-Proto and SvelteKit reads it back through PROTOCOL_HEADER.
+    map $http_x_forwarded_proto $ciso_scheme {
+        default $http_x_forwarded_proto;
+        ""      $scheme;
+    }
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ""      close;
+    }
+
+    resolver ${NGINX_RESOLVER} valid=10s ipv6=on;
+
+    server {
+        listen ${NGINX_PORT};
+        listen [::]:${NGINX_PORT};
+        server_name _;
+
+        set $ciso_backend "${BACKEND_HOST}:${BACKEND_PORT}";
+        set $ciso_frontend "127.0.0.1:${FRONTEND_NODE_PORT}";
+
+        # CISO Assistant's own backend has no login throttle of any kind:
+        # there is no django-axes, no DRF throttle class and no rate limit
+        # setting anywhere in ciso_assistant/settings.py, so the allauth login
+        # endpoint answers unlimited password guesses at full speed.
+        location /api/_allauth/app/v1/auth/login {
+            limit_req zone=ciso_auth burst=5 nodelay;
+            proxy_pass http://$ciso_backend$request_uri;
+            include /etc/nginx/railway-proxy-headers.conf;
+        }
+
+        location /api/ {
+            proxy_pass http://$ciso_backend$request_uri;
+            include /etc/nginx/railway-proxy-headers.conf;
+        }
+
+        location / {
+            proxy_pass http://$ciso_frontend$request_uri;
+            include /etc/nginx/railway-proxy-headers.conf;
+        }
+    }
+}
