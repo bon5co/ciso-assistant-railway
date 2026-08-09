@@ -36,6 +36,8 @@ ENV NODE_OPTIONS="" \
     HOST_HEADER=x-forwarded-host \
     BODY_SIZE_LIMIT=50000000 \
     FRONTEND_NODE_PORT=3000 \
+    BACKEND_HOST=backend.railway.internal \
+    PUBLIC_BACKEND_API_URL=http://backend.railway.internal:8080/api \
     BACKEND_PORT=8080
 
 ENTRYPOINT ["/usr/local/bin/railway-entrypoint.sh"]
