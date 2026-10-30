@@ -1,5 +1,9 @@
 # ciso-assistant-railway
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/ciso-assistant-v3210-or-grc-you-can-actu?referralCode=Z1xivh&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+**Deploy on Railway:** [CISO Assistant template](https://railway.com/deploy/ciso-assistant-v3210-or-grc-you-can-actu?referralCode=Z1xivh&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 Railway-tuned wrapper images for [CISO Assistant](https://github.com/intuitem/ciso-assistant-community)
 (GRC: risk register, compliance frameworks, audits, evidence, incidents).
 
